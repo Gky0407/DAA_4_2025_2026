@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sudoku Solver</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #f0f0f0;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            max-width: 600px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background: #4CAF50;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background: #45a049;
+        }
+
+        button.clear-btn {
+            background: #f44336;
+        }
+
+        button.clear-btn:hover {
+            background: #da190b;
+        }
+
+        .grid-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .grid-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .sudoku-grid {
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            gap: 0;
+            border: 3px solid #333;
+        }
+
+        .cell {
+            width: 50px;
+            height: 50px;
+            border: 1px solid #ddd;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            background: white;
+            cursor: pointer;
+        }
+
+        .cell.selected {
+            background: #e3f2fd;
+            border: 2px solid #2196F3;
+        }
+
+        .cell.user-input {
+            color: #000;
+        }
+
+        .cell.solved {
+            color: #4CAF50;
+        }
+
+        .cell.invalid {
+            background: #ffebee;
+            color: #f44336;
+        }
+
+        /* for highlighting the grid */
+        .cell:nth-child(3n):not(:nth-child(9n)) {
+            border-right: 3px solid #333;
+        }
+
+        .cell:nth-child(n+19):nth-child(-n+27),
+        .cell:nth-child(n+46):nth-child(-n+54) {
+            border-bottom: 3px solid #333;
+        }
+
+        .info {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+        }
+
+        .status {
+            text-align: center;
+            margin: 14px;
+            font-size: 18px;
+            font-weight: bold;
+            min-height: 25px;
+        }
+
+        .status.success {
+            color: #4CAF50;
+        }
+
+        .status.error {
+            color: #f44336;
+        }
+
+        .status.info {
+            color: #2196F3;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Sudoku Solver</h1>
+
+        <div class="status" id="status">Enter your puzzle and click Solve</div>
+        
+        <div class="controls">
+            <button onclick="solveSudoku()">Solve</button>
+            <button class="clear-btn" onclick="clearGrid()">Clear All</button>
+        </div>
+
+        <div class="grid-wrapper">
+            <div class="grid-title">Enter Your Sudoku</div>
+            <div class="sudoku-grid" id="grid"></div>
+        </div>
+
+        <div class="info">
+            Click a cell and type numbers 1-9 
+        </div>
+
+        <!-- <div class="status" id="status">Enter your puzzle and click Solve</div> -->
+    </div>
+
+    <script>
+        let board = Array(9).fill(0).map(() => Array(9).fill(0));
+        let userInput = Array(9).fill(0).map(() => Array(9).fill(false));
+        let selectedRow = 0;
+        let selectedCol = 0;
+
+        function renderGrid() {
+            const gridEl = document.getElementById('grid');
+            gridEl.innerHTML = '';
+            
+            for (let row = 0; row < 9; row++) {
+                for (let col = 0; col < 9; col++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    
+                    const value = board[row][col];
+                    if (value !== 0) {
+                        cell.textContent = value;
+                        if (userInput[row][col]) {
+                            cell.classList.add('user-input');
+                        } else {
+                            cell.classList.add('solved');
+                        }
+                    }
+                    
+                    if (row === selectedRow && col === selectedCol) {
+                        cell.classList.add('selected');
+                    }
+                    
+                    cell.addEventListener('click', () => selectCell(row, col));
+                    gridEl.appendChild(cell);
+                }
+            }
+        }
+
+        function selectCell(row, col) {
+            selectedRow = row;
+            selectedCol = col;
+            renderGrid();
+        }
+
+        function isValidPlacement(board, row, col, num) {
+
+            for (let x = 0; x < 9; x++) {
+                if (x !== col && board[row][x] === num) return false;
+            }
+            
+
+            for (let x = 0; x < 9; x++) {
+                if (x !== row && board[x][col] === num) return false;
+            }
+            
+
+            const startRow = Math.floor(row / 3) * 3;
+            const startCol = Math.floor(col / 3) * 3;
+            for (let i = 0; i < 3; i++) {
+                for (let j = 0; j < 3; j++) {
+                    const r = i + startRow;
+                    const c = j + startCol;
+                    if ((r !== row || c !== col) && board[r][c] === num) {
+                        return false;
+                    }
+                }
+            }
+            
+            return true;
+        }
+
+        function validateCurrentBoard() {
+            for (let row = 0; row < 9; row++) {
+                for (let col = 0; col < 9; col++) {
+                    if (board[row][col] !== 0) {
+                        if (!isValidPlacement(board, row, col, board[row][col])) {
+                            return false;
+                        }
+                    }
+                }
+            }
+            return true;
+        }
+
+        function isValid(board, row, col, num) {
+            for (let x = 0; x < 9; x++) {
+                if (board[row][x] === num) return false;
+            }
+            
+
+            for (let x = 0; x < 9; x++) {
+                if (board[x][col] === num) return false;
+            }
+            
+            const startRow = Math.floor(row / 3) * 3;
+            const startCol = Math.floor(col / 3) * 3;
+            for (let i = 0; i < 3; i++) {
+                for (let j = 0; j < 3; j++) {
+                    if (board[i + startRow][j + startCol] === num) return false;
+                }
+            }
+            
+            return true;
+        }
+
+        function solve(board) {
+            for (let row = 0; row < 9; row++) {
+                for (let col = 0; col < 9; col++) {
+                    if (board[row][col] === 0) {
+                        for (let num = 1; num <= 9; num++) {
+                            if (isValid(board, row, col, num)) {
+                                board[row][col] = num;
+                                
+                                if (solve(board)) {
+                                    return true;
+                                }
+                                
+                                board[row][col] = 0;
+                            }
+                        }
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        function solveSudoku() {
+            const statusEl = document.getElementById('status');
+
+            if (!validateCurrentBoard()) {
+                statusEl.textContent = '❌ Invalid sudoku! Check for conflicts in rows, columns, or boxes.';
+                statusEl.className = 'status error';
+                return;
+            }
+
+            let isEmpty = true;
+            for (let row = 0; row < 9; row++) {
+                for (let col = 0; col < 9; col++) {
+                    if (board[row][col] !== 0) {
+                        isEmpty = false;
+                        break;
+                    }
+                }
+                if (!isEmpty) break;
+            }
+
+            if (isEmpty) {
+                statusEl.textContent = 'Please enter at least one number';
+                statusEl.className = 'status info';
+                return;
+            }
+
+            
+            const tempBoard = board.map(row => [...row]);
+            
+            if (solve(tempBoard)) {
+                board = tempBoard;
+                statusEl.textContent = '✅ Sudoku solved successfully!';
+                statusEl.className = 'status success';
+                renderGrid();
+            } else {
+                statusEl.textContent = '❌ No solution exists for this sudoku!';
+                statusEl.className = 'status error';
+            }
+        }
+
+        function clearGrid() {
+            board = Array(9).fill(0).map(() => Array(9).fill(0));
+            userInput = Array(9).fill(0).map(() => Array(9).fill(false));
+            selectedRow = 0;
+            selectedCol = 0;
+            document.getElementById('status').textContent = 'Enter your puzzle and click Solve';
+            document.getElementById('status').className = 'status info';
+            renderGrid();
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                selectedRow = (selectedRow - 1 + 9) % 9;
+                renderGrid();
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                selectedRow = (selectedRow + 1) % 9;
+                renderGrid();
+            } else if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                selectedCol = (selectedCol - 1 + 9) % 9;
+                renderGrid();
+            } else if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                selectedCol = (selectedCol + 1) % 9;
+                renderGrid();
+            }
+
+            if (e.key >= '1' && e.key <= '9') {
+                board[selectedRow][selectedCol] = parseInt(e.key);
+                userInput[selectedRow][selectedCol] = true;
+                renderGrid();
+                document.getElementById('status').textContent = 'Enter your puzzle and click Solve';
+                document.getElementById('status').className = 'status info';
+            } else if (e.key === '0' || e.key === 'Delete' || e.key === 'Backspace') {
+                board[selectedRow][selectedCol] = 0;
+                userInput[selectedRow][selectedCol] = false;
+                renderGrid();
+            }
+        });
+
+
+        renderGrid();
+    </script>
+</body>
+</html>
